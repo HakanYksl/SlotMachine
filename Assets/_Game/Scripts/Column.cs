@@ -1,82 +1,123 @@
 using DG.Tweening;
 using System;
 using System.Collections.Generic;
+using Unity.Mathematics;
 using UnityEngine;
 using Random = UnityEngine.Random;
 public class Column : MonoBehaviour
 {
-    [SerializeField] private List<SlotNumber> _columnNumbers;
-    [SerializeField] private Column _nextColumn;
-    [SerializeField] private bool _IsFirst;
-    [SerializeField] private float _elementHeight;
-    [SerializeField] private float _turnDuration;
-    [SerializeField] private float _DelayForNextColumStop;
-    private int m_RandomNumber;
-    private bool _isMoving;
-    private bool _isStoppingStarted;
+    [SerializeField] private List<SlotNumber> columnNumbers;
+    [SerializeField] private Column nextColumn;
+    [SerializeField] private bool isFirst;
+    [SerializeField] private float elementHeight;
+    [SerializeField] private float turnDuration;
+    [SerializeField] private float delayForNextColumStop;
     [SerializeField] private float speed;
-    private float _currrentSpeed;
+    [SerializeField] private float speedWhenStopping;
+    [SerializeField] private List<Column> speedUpColumns;
+    private int randomNumber;
+    private bool isMoving;
+    private bool isStoppingStarted;
+    private float currentSpeed;
+
+    #region Events
+    public static event LastColumnStoppedEvent OnLastColumnStopped = delegate { };
+    public delegate void LastColumnStoppedEvent();
+    public void RaiseLastColumnStopped() { OnLastColumnStopped.Invoke(); }
+    #endregion
     private void Start()
     {
         int index=0;
-        foreach(SlotNumber t in _columnNumbers)
+        foreach(SlotNumber t in columnNumbers)
         {
-            t.transform.Translate(0, (_elementHeight * index) + (_elementHeight/2), 0);
+            t.transform.Translate(0, (elementHeight * index) -(columnNumbers.Count/2*elementHeight), 0);
             if(index>0)
             {
-                t.SetNext(_columnNumbers[index-1]);
+                t.SetNext(columnNumbers[index-1]);
             }
             else
             {
-                _columnNumbers[0].SetNext(_columnNumbers[_columnNumbers.Count-1]);
+                columnNumbers[0].SetNext(columnNumbers[columnNumbers.Count-1]);
             }
             index++;
         }
     }
+    private void FinalizeMovement()
+    {
+        transform.DOPunchPosition(Vector3.down, 0.25f, 1).OnComplete(() => 
+        { 
+            if(nextColumn==null)
+            {
+                RaiseLastColumnStopped();
+            }
+        });
+    }
     private void Update()
     {
-        if(_isStoppingStarted)
+        if(isStoppingStarted)
         {
-            if (_columnNumbers[m_RandomNumber].transform.position.y<0.25f && _columnNumbers[m_RandomNumber].transform.position.y > -0.25f)
+            if (columnNumbers[randomNumber].transform.position.y<0.25f && columnNumbers[randomNumber].transform.position.y > -0.25f)
             {
-                if(_nextColumn)
+                if(nextColumn)
                 {
-                    DOVirtual.DelayedCall(_DelayForNextColumStop, () => 
+                    DOVirtual.DelayedCall(delayForNextColumStop, () => 
                     {
-                        _nextColumn.StartStopping();
+                        nextColumn.StartStopping();
                     });
                 }
-                _isMoving = false;
-                _isStoppingStarted = false;
+                float delta = -columnNumbers[randomNumber].transform.position.y;
+                foreach (SlotNumber slotNumber in columnNumbers)
+                {
+                    slotNumber.Move(delta);
+                    slotNumber.StopLooping();
+                }
+
+                if (speedUpColumns != null)
+                {
+                    foreach (Column column in speedUpColumns)
+                    {
+                        column.SpeedUp();
+                    }
+                }
+
+                isMoving = false;
+                isStoppingStarted = false;
+                FinalizeMovement();
             }
         }
-
-        if (!_isMoving)
+        if (!isMoving)
         {
             return;
         }
-        float movement = _currrentSpeed * Time.deltaTime;
-        foreach (SlotNumber t in _columnNumbers)
+        float movement = currentSpeed * Time.deltaTime;
+        foreach (SlotNumber t in columnNumbers)
         {
             t.Move(movement);
         }
     }
+    public void SpeedUp()
+    {
+        currentSpeed = speedWhenStopping;
+    }
     public void StartStopping()
     {
-        _isStoppingStarted = true;
+        isStoppingStarted = true;
     }
     public void Roll()
     {
-        m_RandomNumber=Random.Range(0, _columnNumbers.Count);
-        _isStoppingStarted = false;
-        _isMoving=true;
-        _currrentSpeed = speed;
-
-        DOVirtual.DelayedCall(_turnDuration-2, () =>
+        currentSpeed = speed;
+        randomNumber=Random.Range(0, columnNumbers.Count);
+        isStoppingStarted = false;
+        isMoving=true;
+        foreach (SlotNumber t in columnNumbers)
         {
-            if (_IsFirst)
+            t.StartLooping();
+        }
+        DOVirtual.DelayedCall(turnDuration-2, () =>
+        {
+            if (isFirst)
             {
-                _isStoppingStarted = true;
+                isStoppingStarted = true;
             }
         });
     }

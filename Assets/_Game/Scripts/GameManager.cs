@@ -4,11 +4,29 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
-    [SerializeField] private List<Column> _columns;
-
+    [SerializeField] private List<Column> columns;
+    private bool isRolling;
+    private void OnEnable()
+    {
+        Column.OnLastColumnStopped += HandleRollingFinished;
+    }
+    private void OnDisable()
+    {
+        Column.OnLastColumnStopped -= HandleRollingFinished;
+    }
+    private void HandleRollingFinished()
+    {
+        isRolling = false;
+    }
     public void RollTheColumns()
     {
-        foreach(Column column in _columns)
+        if(isRolling)
+        {
+            return;
+        }
+
+        isRolling = true;
+        foreach(Column column in columns)
         {
             column.Roll();
         }
